@@ -58,7 +58,7 @@ export const acceptFriendRequest = async (req, res) => {
         if (!request) {
             return res.status(404).json({ message: "Lời mời kết bạn không tồn tại" });
         }
-        if (request.to.toString() !== userId) {
+        if (request.to.toString() !== userId.toString()) {
             return res.status(403).json({ message: "Bạn không có quyền chấp nhận lời mời kết bạn này" });
         }
 
@@ -108,7 +108,30 @@ export const declineFriendRequest = async (req, res) => {
 
 export const getAllFriends = async (req, res) => {
     try {
-        
+        const userId = req.user._id;
+
+        const friendships = await Friend.find({
+            $or: [
+                {
+                    userA: userId,
+                },
+                {
+                    userB: userId,
+                }
+            ]
+        })
+        .populate("userA", "_id displayName avatarUrl")
+        .populate("userB", "_id displayName avatarUrl")
+        .lean();
+
+        if (!friendships.length){
+            return res.status(200).json({friends:[]})
+        }
+
+        const friends = friendships.map((f) => f.userA._id.toString() === userId.toString() ? f.userB : f.userA);
+
+        return res.status(200).json({friends});
+
     } catch (error) {
         console.error("Lỗi khi lấy danh sách bạn bè:", error);
         res.status(500).json({ message: "Lỗi hệ thống" });
@@ -117,7 +140,16 @@ export const getAllFriends = async (req, res) => {
 
 export const getFriendRequests = async (req, res) => {
     try {
-        
+        const userId = req.user._id;
+
+        const populateFields = '_id username displayName avatarUrl';
+
+        const [sent, recevied] = await Promise.all([
+            FriendRequest.find({from: userId}).populate("to", populateFields),
+        FriendRequest.find({to: userId}).populate("from", populateFields)
+        ])
+
+        res.status(200).json({sent, recevied});
     } catch (error) {
         console.error("Lỗi khi lấy danh sách yêu cầu kết bạn:", error);
         res.status(500).json({ message: "Lỗi hệ thống" });
